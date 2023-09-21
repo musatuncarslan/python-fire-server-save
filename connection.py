@@ -14,9 +14,9 @@ import socket
 import numpy as np
 
 class Connection:
-    def __init__(self, socket, savedata, savedataFile = "", savedataFolder = "", savedataGroup = "dataset"):
-        self.savedata       = savedata
-        self.savedataFile   = savedataFile
+    def __init__(self, socket, savefolder, savedataFile = "", savedataFolder = "", savedataGroup = "dataset"):
+        self.savefolder     = savefolder
+        self.savedataFile   = savedataFolder
         self.savedataFolder = savedataFolder
         self.savedataGroup  = savedataGroup
         self.mrdFilePath    = None
@@ -40,23 +40,6 @@ class Connection:
             constants.MRD_MESSAGE_ISMRMRD_WAVEFORM:    self.read_waveform,
             constants.MRD_MESSAGE_ISMRMRD_IMAGE:       self.read_image
         }
-
-    def create_save_file(self):
-        if self.savedata is True:
-            # Create savedata folder, if necessary
-            if ((self.savedataFolder) and (not os.path.exists(self.savedataFolder))):
-                os.makedirs(self.savedataFolder)
-                logging.debug("Created folder " + self.savedataFolder + " to save incoming data")
-
-            if (self.savedataFile):
-                self.mrdFilePath = self.savedataFile
-            else:
-                self.mrdFilePath = os.path.join(self.savedataFolder, "MRD_input_" + datetime.now().strftime("%Y-%m-%d-%H%M%S" + "_" + str(random.randint(0,100)) + ".h5"))
-
-            # Create HDF5 file to store incoming MRD data
-            logging.info("Incoming data will be saved to: '%s' in group '%s'", self.mrdFilePath, self.savedataGroup)
-            self.dset = ismrmrd.Dataset(self.mrdFilePath, self.savedataGroup)
-            self.dset._file.require_group(self.savedataGroup)
 
     def send_logging(self, level, contents):
         try:
@@ -125,27 +108,9 @@ class Connection:
     def read_config_file(self):
         logging.info("<-- Received MRD_MESSAGE_CONFIG_FILE (1)")
         config_file_bytes = self.read(constants.SIZEOF_MRD_MESSAGE_CONFIGURATION_FILE)
-        config_file = constants.MrdMessageConfigurationFile.unpack(config_file_bytes)[0].decode("utf-8")
-        config_file = config_file.split('\x00',1)[0]  # Strip off null terminators in fixed 1024 size
-
+        config_file = constants.MrdMessageConfigurationFile.unpack(config_file_bytes)[0].decode("utf-8").split('\x00', 1)[0] # unpack, decode, and strip off null terminators in fixed 1024 size
         logging.debug("    " + config_file)
-        if (config_file == "savedataonly"):
-            logging.info("Save data, but no processing based on config")
-            if self.savedata is True:
-                logging.debug("Saving data is already enabled")
-            else:
-                self.savedata = True
-                self.create_save_file()
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            self.dset._file.require_group("dataset")
-            dsetConfigFile = self.dset._dataset.require_dataset('config_file',shape=(1,), dtype=h5py.special_dtype(vlen=bytes))
-            dsetConfigFile[0] = bytes(config_file, 'utf-8')
-
-        return config_file
+        return 1, config_file, config_file_bytes
 
     # ----- MRD_MESSAGE_CONFIG_TEXT (2) --------------------------------------
     # This message contains the configuration information (text contents) used 
@@ -165,18 +130,10 @@ class Connection:
     def read_config_text(self):
         logging.info("<-- Received MRD_MESSAGE_CONFIG_TEXT (2)")
         length = self.read_mrd_message_length()
-        config = self.read(length)
-        config = config.decode("utf-8").split('\x00',1)[0]  # Strip off null teminator
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            self.dset._file.require_group("dataset")
-            dsetConfig = self.dset._dataset.require_dataset('config',shape=(1,), dtype=h5py.special_dtype(vlen=bytes))
-            dsetConfig[0] = bytes(config, 'utf-8')
-
-        return config
+        config_bytes = self.read(length)
+        config = config_bytes.decode("utf-8").split('\x00',1)[0]  # Strip off null terminator
+        logging.debug("    " + config)
+        return 2, config, config_bytes
 
     # ----- MRD_MESSAGE_METADATA_XML_TEXT (3) -----------------------------------
     # This message contains the metadata for the entire dataset, formatted as
@@ -196,17 +153,9 @@ class Connection:
     def read_metadata(self):
         logging.info("<-- Received MRD_MESSAGE_METADATA_XML_TEXT (3)")
         length = self.read_mrd_message_length()
-        metadata = self.read(length)
-        metadata = metadata.decode("utf-8").split('\x00',1)[0]  # Strip off null teminator
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            logging.debug("    Saving XML header to file")
-            self.dset.write_xml_header(bytes(metadata, 'utf-8'))
-
-        return metadata
+        metadata_bytes = self.read(length)
+        metadata = metadata_bytes.decode("utf-8").split('\x00',1)[0]  # Strip off null teminator
+        return 3, metadata, metadata_bytes
 
     # ----- MRD_MESSAGE_CLOSE (4) ----------------------------------------------
     # This message signals that all data has been sent (either from server or client).
@@ -217,14 +166,8 @@ class Connection:
 
     def read_close(self):
         logging.info("<-- Received MRD_MESSAGE_CLOSE (4)")
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            logging.debug("Closing file %s", self.dset._file.filename)
-            self.dset.close()
-            self.dset = None
+        if self.savefolder:
+            logging.debug("Saved received files under: %s", self.savefolder)
 
         self.is_exhausted = True
         return
@@ -247,10 +190,10 @@ class Connection:
     def read_text(self):
         logging.info("<-- Received MRD_MESSAGE_TEXT (5)")
         length = self.read_mrd_message_length()
-        text = self.read(length)
-        text = text.decode("utf-8").split('\x00',1)[0]  # Strip off null teminator
+        text_bytes = self.read(length)
+        text = text_bytes.decode("utf-8").split('\x00',1)[0]  # Strip off null teminator
         logging.info("    %s", text)
-        return text
+        return 5, text, text_bytes
 
     # ----- MRD_MESSAGE_ISMRMRD_ACQUISITION (1008) -----------------------------
     # This message contains raw k-space data from a single readout.
@@ -274,12 +217,6 @@ class Connection:
             logging.info("<-- Received MRD_MESSAGE_ISMRMRD_ACQUISITION (1008) (total: %d)", self.recvAcqs)
 
         acq = ismrmrd.Acquisition.deserialize_from(self.read)
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            self.dset.append_acquisition(acq)
 
         return acq
 
@@ -314,39 +251,34 @@ class Connection:
         # return ismrmrd.Image.deserialize_from(self.read)
 
         # Explicit version of deserialize_from() for more verbose debugging
-        logging.debug("   Reading in %d bytes of image header", ctypes.sizeof(ismrmrd.ImageHeader))
+        logging.info("\tReading in %d bytes of image header", ctypes.sizeof(ismrmrd.ImageHeader))
         header_bytes = self.read(ctypes.sizeof(ismrmrd.ImageHeader))
 
         attribute_length_bytes = self.read(ctypes.sizeof(ctypes.c_uint64))
         attribute_length = ctypes.c_uint64.from_buffer_copy(attribute_length_bytes)
-        logging.debug("   Reading in %d bytes of attributes", attribute_length.value)
+        logging.debug("\tReading in %d bytes of attributes", attribute_length.value)
 
         attribute_bytes = self.read(attribute_length.value)
-        if (attribute_length.value > 25000):
-            logging.debug("   Attributes (truncated): %s", attribute_bytes[0:24999].decode('utf-8'))
-        else:
-            logging.debug("   Attributes: %s", attribute_bytes.decode('utf-8'))
+        #if (attribute_length.value > 25000):
+        #    logging.debug("   Attributes (truncated): %s", attribute_bytes[0:24999].decode('utf-8'))
+        #else:
+        #    logging.debug("   Attributes: %s", attribute_bytes.decode('utf-8'))
 
         image = ismrmrd.Image(header_bytes, attribute_bytes.decode('utf-8').split('\x00',1)[0])  # Strip off null teminator
 
-        logging.info("    Image is size %d x %d x %d with %d channels of type %s", image.matrix_size[0], image.matrix_size[1], image.matrix_size[2], image.channels, ismrmrd.get_dtype_from_data_type(image.data_type))
+        logging.info("\tImage is size %d x %d x %d with %d channels of type %s", image.getHead().matrix_size[0], image.getHead().matrix_size[1], image.getHead().matrix_size[2], image.channels, ismrmrd.get_dtype_from_data_type(image.data_type))
         def calculate_number_of_entries(nchannels, xs, ys, zs):
             return nchannels * xs * ys * zs
 
         nentries = calculate_number_of_entries(image.channels, *image.matrix_size)
         nbytes = nentries * ismrmrd.get_dtype_from_data_type(image.data_type).itemsize
 
-        logging.debug("Reading in %d bytes of image data", nbytes)
+        logging.debug("\tReading in %d bytes of image data", nbytes)
         data_bytes = self.read(nbytes)
 
         image.data.ravel()[:] = np.frombuffer(data_bytes, dtype=ismrmrd.get_dtype_from_data_type(image.data_type))
 
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-            self.dset.append_image("images_%d" % image.image_series_index, image)
-
-        return image
+        return 1022, image, header_bytes, attribute_bytes, data_bytes
 
     # ----- MRD_MESSAGE_ISMRMRD_WAVEFORM (1026) -----------------------------
     # This message contains abitrary (e.g. physio) waveform data.

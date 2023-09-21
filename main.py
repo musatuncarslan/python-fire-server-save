@@ -14,9 +14,10 @@ defaults = {
     'savedataFolder': '/tmp/share/saved_data'
 }
 
+# TODO: ADD SEND DATA
 def main(args):
     # Create a multi-threaded dispatcher to handle incoming connections
-    server = Server(args.host, args.port, args.savedata, args.savedataFolder, args.multiprocessing)
+    server = Server(args.host, args.port, args.savefolder, args.savedataFolder, args.multiprocessing)
 
     # Trap signal interrupts (e.g. ctrl+c, SIGTERM) and gracefully stop
     def handle_signals(signum, frame):
@@ -39,8 +40,8 @@ if __name__ == '__main__':
     parser.add_argument('-H', '--host',            type=str,            help='Host')
     parser.add_argument('-v', '--verbose',         action='store_true', help='Verbose output.')
     parser.add_argument('-l', '--logfile',         type=str,            help='Path to log file')
-    parser.add_argument('-s', '--savedata',        action='store_true', help='Save incoming data')
-    parser.add_argument('-S', '--savedataFolder',  type=str,            help='Folder to save incoming data')
+    parser.add_argument('-s', '--savedataFolder',  type=str,            help='Path to saved data files')
+    parser.add_argument('-S', '--savefolder',      type=str,            help='Path to saved data files')
     parser.add_argument('-m', '--multiprocessing', action='store_true', help='Use multiprocessing')
     parser.add_argument('-r', '--crlf',            action='store_true', help='Use Windows (CRLF) line endings')
 
@@ -60,14 +61,26 @@ if __name__ == '__main__':
             os.makedirs(os.path.dirname(args.logfile))
 
         logging.basicConfig(filename=args.logfile, format=fmt, level=logging.WARNING)
-        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     else:
         print("No logfile provided")
+        logging.basicConfig(format=fmt, level=logging.WARNING)
+
+    if args.savedataFolder:
+        print("Saving to file: ", args.savedataFolder)
+
+        if not os.path.exists(os.path.dirname(args.savedataFolder)):
+            os.makedirs(os.path.dirname(args.savedataFolder))
+
+        logging.basicConfig(filename=args.savedataFolder, format=fmt, level=logging.WARNING)
+    else:
+        print("No data folder provided")
         logging.basicConfig(format=fmt, level=logging.WARNING)
 
     if args.verbose:
         logging.root.setLevel(logging.DEBUG)
     else:
         logging.root.setLevel(logging.INFO)
+
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
     main(args)
