@@ -276,7 +276,7 @@ class Connection:
         logging.debug("\tReading in %d bytes of image data", nbytes)
         data_bytes = self.read(nbytes)
 
-        image.data.ravel()[:] = np.frombuffer(data_bytes, dtype=ismrmrd.get_dtype_from_data_type(image.data_type))
+        #image.data.ravel()[:] = np.frombuffer(data_bytes, dtype=ismrmrd.get_dtype_from_data_type(image.data_type)) # this is not necessary for saving purposes
 
         return 1022, image, header_bytes, attribute_bytes, data_bytes
 

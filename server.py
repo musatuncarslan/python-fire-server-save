@@ -75,12 +75,15 @@ class Server:
                                          metadata.acquisitionSystemInformation.systemModel,
                                          metadata.acquisitionSystemInformation.systemFieldStrength_T)
                             if self.savedataFolder:
-                                hf = h5py.File(self.savedataFolder + '/measurement-' + now.strftime("%Y%m%dT%H%M%S") + '.hdf5', 'w')
-                                while not os.path.exists(self.savedataFolder + '/measurement-' + now.strftime("%Y%m%dT%H%M%S") + '.hdf5'):
-                                    time.sleep(0.1)
-                                    logging.info("Waiting for file...")
-                            hf.create_dataset("Config File", data=bytearray(config_bytes))
-                            hf.create_dataset("Metada XML", data=bytearray(metadata_bytes))
+                                try:
+                                    hf = h5py.File(self.savedataFolder + '/measurement-' + now.strftime("%Y%m%dT%H%M%S") + '.hdf5', 'w')
+                                    while not os.path.exists(self.savedataFolder + '/measurement-' + now.strftime(
+                                            "%Y%m%dT%H%M%S") + '.hdf5'):
+                                        logging.info("Waiting for file...")
+                                    hf.create_dataset("Config File", data=bytearray(config_bytes))
+                                    hf.create_dataset("Metada XML", data=bytearray(metadata_bytes))
+                                except Exception as e:
+                                    logging.exception(e)
                     except:
                         logging.warning("Metadata is not a valid MRD XML structure.  Passing on metadata as text")
                 elif item[0] == 1022:
