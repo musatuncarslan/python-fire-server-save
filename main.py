@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 from server import Server
-
 import argparse
 import logging
 import sys
@@ -11,13 +10,12 @@ import signal
 defaults = {
     'host':           '0.0.0.0',
     'port':           9002,
-    'savedataFolder': '/tmp/share/saved_data'
 }
 
 # TODO: ADD SEND DATA
 def main(args):
     # Create a multi-threaded dispatcher to handle incoming connections
-    server = Server(args.host, args.port, args.savefolder, args.savedataFolder, args.multiprocessing)
+    server = Server(args.host, args.port, args.savedatafolder)
 
     # Trap signal interrupts (e.g. ctrl+c, SIGTERM) and gracefully stop
     def handle_signals(signum, frame):
@@ -40,9 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('-H', '--host',            type=str,            help='Host')
     parser.add_argument('-v', '--verbose',         action='store_true', help='Verbose output.')
     parser.add_argument('-l', '--logfile',         type=str,            help='Path to log file')
-    parser.add_argument('-s', '--savedataFolder',  type=str,            help='Path to saved data files')
-    parser.add_argument('-S', '--savefolder',      type=str,            help='Path to saved data files')
-    parser.add_argument('-m', '--multiprocessing', action='store_true', help='Use multiprocessing')
+    parser.add_argument('-s', '--savedatafolder',  type=str,            help='Path to saved data files')
     parser.add_argument('-r', '--crlf',            action='store_true', help='Use Windows (CRLF) line endings')
 
     parser.set_defaults(**defaults)
@@ -65,13 +61,13 @@ if __name__ == '__main__':
         print("No logfile provided")
         logging.basicConfig(format=fmt, level=logging.WARNING)
 
-    if args.savedataFolder:
-        print("Saving to file: ", args.savedataFolder)
+    if args.savedatafolder:
+        print("Saving to file: ", args.savedatafolder)
 
-        if not os.path.exists(os.path.dirname(args.savedataFolder)):
-            os.makedirs(os.path.dirname(args.savedataFolder))
+        if not os.path.exists(os.path.dirname(args.savedatafolder)):
+            os.makedirs(os.path.dirname(args.savedatafolder))
 
-        logging.basicConfig(filename=args.savedataFolder, format=fmt, level=logging.WARNING)
+        logging.basicConfig(filename=args.savedatafolder, format=fmt, level=logging.WARNING)
     else:
         print("No data folder provided")
         logging.basicConfig(format=fmt, level=logging.WARNING)

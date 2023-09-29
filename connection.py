@@ -1,26 +1,13 @@
-
-
 import constants
 import ismrmrd
 import ctypes
-import os
-from datetime import datetime
-import h5py
-import random
 import threading
 
 import logging
 import socket
-import numpy as np
 
 class Connection:
-    def __init__(self, socket, savefolder, savedataFile = "", savedataFolder = "", savedataGroup = "dataset"):
-        self.savefolder     = savefolder
-        self.savedataFile   = savedataFolder
-        self.savedataFolder = savedataFolder
-        self.savedataGroup  = savedataGroup
-        self.mrdFilePath    = None
-        self.dset           = None
+    def __init__(self, socket):
         self.socket         = socket
         self.is_exhausted   = False
         self.sentAcqs       = 0
@@ -109,7 +96,7 @@ class Connection:
         logging.info("<-- Received MRD_MESSAGE_CONFIG_FILE (1)")
         config_file_bytes = self.read(constants.SIZEOF_MRD_MESSAGE_CONFIGURATION_FILE)
         config_file = constants.MrdMessageConfigurationFile.unpack(config_file_bytes)[0].decode("utf-8").split('\x00', 1)[0] # unpack, decode, and strip off null terminators in fixed 1024 size
-        logging.debug("    " + config_file)
+        logging.debug("\t" + config_file)
         return 1, config_file, config_file_bytes
 
     # ----- MRD_MESSAGE_CONFIG_TEXT (2) --------------------------------------
@@ -166,9 +153,6 @@ class Connection:
 
     def read_close(self):
         logging.info("<-- Received MRD_MESSAGE_CLOSE (4)")
-        if self.savefolder:
-            logging.debug("Saved received files under: %s", self.savefolder)
-
         self.is_exhausted = True
         return
 
@@ -299,14 +283,6 @@ class Connection:
         self.recvWaveforms += 1
         if (self.recvWaveforms == 1) or (self.recvWaveforms % 100 == 0):
             logging.info("<-- Received MRD_MESSAGE_ISMRMRD_WAVEFORM (1026) (total: %d)", self.recvWaveforms)
-
         waveform = ismrmrd.Waveform.deserialize_from(self.read)
-
-        if self.savedata is True:
-            if self.dset is None:
-                self.create_save_file()
-
-            self.dset.append_waveform(waveform)
-
         return waveform
 
