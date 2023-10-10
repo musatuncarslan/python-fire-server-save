@@ -7,12 +7,5 @@
 
 # Set Python's default temp folder to one that's shared with the host so that
 # it's less likely to accidentally fill up the chroot
-export TMPDIR=/tmp/share
 
-if [ $# -eq 1 ]; then
-  LOG_FILE=${1}
-  python3 /opt/code/python-ismrmrd-server/main.py -v -r -H=0.0.0.0 -p=9002 -l=${LOG_FILE} &
-else
-  python3 /opt/code/python-ismrmrd-server/main.py -v -r -H=0.0.0.0 -p=9002 &
-fi
-
+docker run --rm -it -p 9002:9002 -v ./save:/opt/code/python-fire-server-base/save -v ./logs:/opt/code/python-fire-server-base/logs python-fire-server:base

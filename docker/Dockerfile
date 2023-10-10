@@ -3,10 +3,7 @@ FROM python:3.10.2-slim AS mrd_converter
 ARG  DEBIAN_FRONTEND=noninteractive
 ENV  TZ=America/Chicago
 
-RUN  apt-get update && apt-get install -y git cmake g++ libhdf5-dev libxml2-dev libxslt1-dev libboost-all-dev libfftw3-dev libpugixml-dev
-RUN  mkdir -p /opt/code
-
-# Python Dependencies
+# Python Dependencies from the requirements.txt file
 WORKDIR /usr/local/lib/
 COPY requirements.txt ./
 
@@ -14,105 +11,25 @@ RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir -r requirements.txt
 
 
-# ISMRMRD library
-RUN cd /opt/code && \
-    git clone https://github.com/ismrmrd/ismrmrd.git && \
-    cd ismrmrd && \
-    git checkout v1.13.4 && \
-    mkdir build && \
-    cd build && \
-    cmake ../ && \
-    make -j $(nproc) && \
-    make install
-
-# siemens_to_ismrmrd converter
-RUN cd /opt/code && \
-    git clone https://github.com/ismrmrd/siemens_to_ismrmrd.git && \
-    cd siemens_to_ismrmrd && \
-    git checkout v1.2.10 && \
-    mkdir build && \
-    cd build && \
-    cmake ../ && \
-    make -j $(nproc) && \
-    make install
-
-# Create archive of ISMRMRD libraries (including symlinks) for second stage
-RUN cd /usr/local/lib && tar -czvf libismrmrd.tar.gz libismrmrd*
-
-# ----- Start another clean build without all of the build dependencies of siemens_to_ismrmrd -----
 #FROM ubuntu:20.04
 #ARG DEBIAN_FRONTEND=noninteractive
 FROM python:3.10.2-slim
 
-LABEL org.opencontainers.image.description="Python MRD Image Reconstruction and Analysis Server"
-LABEL org.opencontainers.image.url="https://github.com/kspaceKelvin/python-fire-server-base"
-LABEL org.opencontainers.image.authors="Kelvin Chow (kelvin.chow@siemens-healthineers.com)"
+# Copy /usr/local/lib/ which includes additional python libraries from the previous stage
+COPY --from=mrd_converter /usr/local/lib/ /usr/local/lib/
 
-# Copy ISMRMRD files from last stage
-COPY --from=mrd_converter /usr/local/include/ismrmrd        /usr/local/include/ismrmrd/
-COPY --from=mrd_converter /usr/local/share/ismrmrd          /usr/local/share/ismrmrd/
-COPY --from=mrd_converter /usr/local/bin/ismrmrd*           /usr/local/bin/
-COPY --from=mrd_converter /usr/local/lib/libismrmrd.tar.gz  /usr/local/lib/
-RUN cd /usr/local/lib && tar -zxvf libismrmrd.tar.gz && rm libismrmrd.tar.gz && ldconfig
-
-# Copy siemens_to_ismrmrd from last stage
-COPY --from=mrd_converter /usr/local/bin/siemens_to_ismrmrd  /usr/local/bin/siemens_to_ismrmrd
-
-# xslt and hdf5 are dependencies for siemens_to_ismrmrd
-RUN apt-get update && apt-get install --no-install-recommends -y libxslt1.1 libhdf5-103 git
-RUN mkdir -p /opt/code
-
-# Python MRD library
-RUN pip3 install h5py ismrmrd==1.13.1
-
-RUN  cd /opt/code \
-     && git clone https://github.com/ismrmrd/ismrmrd-python-tools.git \
-     && cd /opt/code/ismrmrd-python-tools \
-     && pip3 install --no-cache-dir .
-
-# matplotlib is used by rgb.py and provides various visualization tools including colormaps
-# pydicom is used by dicom2mrd.py to parse DICOM data
-RUN pip3 install --no-cache-dir matplotlib pydicom pynetdicom
-
-# # If building from the GitHub repo, uncomment the below section, open a command
-# # prompt in the folder containing this Dockerfile and run the command:
-# #    docker build --no-cache -t kspacekelvin/fire-python ./
-# RUN  cd /opt/code \
-#      && git clone https://github.com/kspaceKelvin/python-fire-server-base.git
-
-# If doing local development, use this section to copy local code into Docker
-# image. From the folder containing the python-fire-server-base repo, uncomment
-# the COPY line below and run the command:
-#RUN docker build --no-cache -t fire-python-custom -f python-fire-server-base/docker/Dockerfile ./
+# Copy local code to the appropriate palce inside the image
 RUN mkdir -p /opt/code/python-fire-server-base \
 	&& mkdir -p /opt/code/python-fire-server-base/doc \
 	&& mkdir -p /opt/code/python-fire-server-base/docker \
 	&& mkdir -p /opt/code/python-fire-server-base/.vscode .
 COPY ./ /opt/code/python-fire-server-base
 
-
-# Ensure startup scripts have Unix (LF) line endings, which may not be true
-# if the git repo is cloned in Windows
-RUN apt-get install -y dos2unix \
-    && find /opt/code/python-fire-server-base -name *.sh | xargs dos2unix \
-    && apt-get remove dos2unix -y
-
 # Ensure startup scripts are marked as executable, which may be lost if files
 # are copied in Windows
 RUN find /opt/code/python-fire-server-base -name *.sh -exec chmod +x {} \;
 
-# Cleanup files not required after installation
-RUN  apt-get remove git -y \
-     && apt-get clean \
-     && rm -rf /var/lib/apt/lists/* \
-     && rm -rf /root/.cache/pip
-
 # Set the starting directory so that code can use relative paths
 WORKDIR /opt/code/python-fire-server-base
 
-CMD [ "python3", "/opt/code/python-fire-server-base/main.py", "-v", "-H=0.0.0.0", "-p=9002", "-l=/tmp/python-fire-server-base.log", "-s", "/tmp/save/" ]
-
-# Replace the above CMD with this ENTRYPOINT to allow allow "docker stop"
-# commands to be passed to the server.  This is useful for deployments, but
-# more annoying for development
-# ENTRYPOINT [ "python3", "/opt/code/python-fire-server-base/main.py", "-v", "-H=0.0.0.0", "-p=9002", "-l=/tmp/python-fire-server-base.log"]
+CMD [ "python3", "/opt/code/python-fire-server-base/main.py", "-v", "-H", "0.0.0.0", "-p=9002", "-l", "/opt/code/python-fire-server-base/logs/python-fire-server-base.log", "-s", "/opt/code/python-fire-server-base/save/" ]
