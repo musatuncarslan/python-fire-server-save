@@ -32,4 +32,4 @@ RUN find /opt/code/python-fire-server-base -name *.sh -exec chmod +x {} \;
 # Set the starting directory so that code can use relative paths
 WORKDIR /opt/code/python-fire-server-base
 
-CMD [ "python3", "/opt/code/python-fire-server-base/main.py", "-v", "-H", "0.0.0.0", "-p=9002", "-l", "/opt/code/python-fire-server-base/logs/python-fire-server-base.log", "-s", "/opt/code/python-fire-server-base/save/" ]
+CMD [ "python3", "/opt/code/python-fire-server-base/main.py", "-v", "-H", "0.0.0.0", "-p=9003", "-l", "/opt/code/python-fire-server-base/logs/python-fire-server-base.log", "-s", "/opt/code/python-fire-server-base/save/" ]

@@ -1,0 +1,1 @@
+docker build --no-cache -t python-fire-server:base -f ./docker/Dockerfile .

@@ -8,4 +8,4 @@
 # Set Python's default temp folder to one that's shared with the host so that
 # it's less likely to accidentally fill up the chroot
 
-docker run --rm -it -p 9002:9002 -v ./save:/opt/code/python-fire-server-base/save -v ./logs:/opt/code/python-fire-server-base/logs python-fire-server:base
+docker run --rm -it -p 9003:9003 -v ./save:/opt/code/python-fire-server-base/save -v ./logs:/opt/code/python-fire-server-base/logs python-fire-server:base
